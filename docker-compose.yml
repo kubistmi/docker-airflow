@@ -1,34 +1,36 @@
 version: '2.1'
 services:
-    redis:
-        image: 'redis:5.0.5'
-        # command: redis-server --requirepass redispass
+    queue:
+        image: rabbitmq:3-management
+        restart: always
+        environment:
+            - RABBITMQ_DEFAULT_USER=${RABBIT_USER}
+            - RABBITMQ_DEFAULT_PASS=${RABBIT_PASS}
+        ports:
+            - "8081:15672"
 
     postgres:
         image: postgres:9.6
+        restart: always
         environment:
-            - POSTGRES_USER=airflow
-            - POSTGRES_PASSWORD=airflow
-            - POSTGRES_DB=airflow
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASS}
+            - POSTGRES_DB=${POSTGRES_DB}
         # Uncomment these lines to persist data on the local filesystem.
-        #     - PGDATA=/var/lib/postgresql/data/pgdata
-        # volumes:
-        #     - ./pgdata:/var/lib/postgresql/data/pgdata
+            - PGDATA=/var/lib/postgresql/data/pgdata
+        volumes:
+            - ${LOCAL_PG}:/var/lib/postgresql/data:Z
 
     webserver:
-        image: puckel/docker-airflow:1.10.9
+        image: kubistmi/airflow:1.10.10
         restart: always
         depends_on:
             - postgres
-            - redis
+            - queue
         environment:
             - LOAD_EX=n
             - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
             - EXECUTOR=Celery
-            # - POSTGRES_USER=airflow
-            # - POSTGRES_PASSWORD=airflow
-            # - POSTGRES_DB=airflow
-            # - REDIS_PASSWORD=redispass
         volumes:
             - ./dags:/usr/local/airflow/dags
             # Uncomment to include custom plugins
@@ -43,19 +45,18 @@ services:
             retries: 3
 
     flower:
-        image: puckel/docker-airflow:1.10.9
+        image: kubistmi/airflow:1.10.10
         restart: always
         depends_on:
-            - redis
+            - queue
         environment:
             - EXECUTOR=Celery
-            # - REDIS_PASSWORD=redispass
         ports:
             - "5555:5555"
         command: flower
 
     scheduler:
-        image: puckel/docker-airflow:1.10.9
+        image: kubistmi/airflow:1.10.10
         restart: always
         depends_on:
             - webserver
@@ -67,14 +68,10 @@ services:
             - LOAD_EX=n
             - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
             - EXECUTOR=Celery
-            # - POSTGRES_USER=airflow
-            # - POSTGRES_PASSWORD=airflow
-            # - POSTGRES_DB=airflow
-            # - REDIS_PASSWORD=redispass
         command: scheduler
 
     worker:
-        image: puckel/docker-airflow:1.10.9
+        image: kubistmi/airflow:1.10.10
         restart: always
         depends_on:
             - scheduler
@@ -85,8 +82,4 @@ services:
         environment:
             - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
             - EXECUTOR=Celery
-            # - POSTGRES_USER=airflow
-            # - POSTGRES_PASSWORD=airflow
-            # - POSTGRES_DB=airflow
-            # - REDIS_PASSWORD=redispass
         command: worker
