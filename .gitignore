@@ -3,3 +3,5 @@ __pycache__
 
 # postgres volume
 pgdata
+
+.vscode/settings.json

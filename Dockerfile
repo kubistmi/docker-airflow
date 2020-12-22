@@ -23,15 +23,17 @@ ENV LC_ALL en_US.UTF-8
 ENV LC_CTYPE en_US.UTF-8
 ENV LC_MESSAGES en_US.UTF-8
 
+# From Rocker:
+## Otherwise timedatectl will get called which leads to 'no systemd' inside Docker
+ENV TZ UTC
+
 # Disable noisy "Handling signal" log messages:
 # ENV GUNICORN_CMD_ARGS --log-level WARNING
-
 RUN set -ex \
     && buildDeps=' \
         freetds-dev \
         libkrb5-dev \
         libsasl2-dev \
-        libssl-dev \
         libffi-dev \
         libpq-dev \
         git \
@@ -40,24 +42,43 @@ RUN set -ex \
     && apt-get upgrade -yqq \
     && apt-get install -yqq --no-install-recommends \
         $buildDeps \
-        freetds-bin \
-        build-essential \
-        default-libmysqlclient-dev \
         apt-utils \
+		ca-certificates \
         curl \
-        rsync \
+        build-essential \
+        ed \
+        freetds-bin \
+        dirmngr \
+		less \
+        libcurl4-openssl-dev \
+        libgit2-dev \
+        libssl-dev \
+        libxml2-dev \
+		locales \
         netcat \
-        locales \
+        rsync \
+        littler \
+ 		r-base \
+ 		r-base-dev \
+ 		r-recommended \
+		software-properties-common \
+		vim-tiny \
+		wget \
     && sed -i 's/^# en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/g' /etc/locale.gen \
     && locale-gen \
     && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
+  	&& ln -s /usr/lib/R/site-library/littler/examples/install.r /usr/local/bin/install.r \
+ 	&& ln -s /usr/lib/R/site-library/littler/examples/install2.r /usr/local/bin/install2.r \
+ 	&& ln -s /usr/lib/R/site-library/littler/examples/installGithub.r /usr/local/bin/installGithub.r \
+ 	&& ln -s /usr/lib/R/site-library/littler/examples/testInstalled.r /usr/local/bin/testInstalled.r \
+ 	&& install.r docopt \
     && useradd -ms /bin/bash -d ${AIRFLOW_USER_HOME} airflow \
     && pip install -U pip setuptools wheel \
     && pip install pytz \
     && pip install pyOpenSSL \
     && pip install ndg-httpsclient \
     && pip install pyasn1 \
-    && pip install apache-airflow[crypto,celery,postgres,hive,jdbc,mysql,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}]==${AIRFLOW_VERSION} \
+    && pip install apache-airflow[crypto,celery,postgres,hive,jdbc,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}]==${AIRFLOW_VERSION} \
     && if [ -n "${PYTHON_DEPS}" ]; then pip install ${PYTHON_DEPS}; fi \
     && apt-get purge --auto-remove -yqq $buildDeps \
     && apt-get autoremove -yqq --purge \
@@ -68,10 +89,13 @@ RUN set -ex \
         /var/tmp/* \
         /usr/share/man \
         /usr/share/doc \
-        /usr/share/doc-base
+        /usr/share/doc-base \
+    && rm -rf /tmp/downloaded_packages/ /tmp/*.rds \
+ 	&& rm -rf /var/lib/apt/lists/*
 
-COPY script/entrypoint.sh /entrypoint.sh
+COPY script /script
 COPY config/airflow.cfg ${AIRFLOW_USER_HOME}/airflow.cfg
+COPY reqs /reqs
 
 RUN chown -R airflow: ${AIRFLOW_USER_HOME}
 
@@ -79,5 +103,11 @@ EXPOSE 8080 5555 8793
 
 USER airflow
 WORKDIR ${AIRFLOW_USER_HOME}
-ENTRYPOINT ["/entrypoint.sh"]
+RUN mkdir "${AIRFLOW_USER_HOME}/R" \
+    && echo "R_LIBS_USER=${AIRFLOW_USER_HOME}/R" > .Renviron \
+    && Rscript -e 'install.packages("devtools")' \
+    && /script/installr.sh \
+    && /script/installpy.sh 
+
+ENTRYPOINT ["/script/entrypoint.sh"]
 CMD ["webserver"]
