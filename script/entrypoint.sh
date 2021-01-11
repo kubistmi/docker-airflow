@@ -96,21 +96,26 @@ fi
 
 case "$1" in
   webserver)
-    airflow initdb
+    airflow db init
     if [ "$AIRFLOW__CORE__EXECUTOR" = "LocalExecutor" ] || [ "$AIRFLOW__CORE__EXECUTOR" = "SequentialExecutor" ]; then
       # With the "Local" and "Sequential" executors it should all run in one container.
       airflow scheduler &
     fi
+    airflow users create -u $2 -e $3 -f $4 -l $5 -p $6 -r Admin
     exec airflow webserver
     ;;
-  worker|scheduler)
-    # Give the webserver time to run initdb.
+  scheduler)
     sleep 10
     exec airflow "$@"
+    ;;
+  worker)
+    # Give the webserver time to run initdb.
+    sleep 10
+    exec airflow celery "$@"
     ;;
   flower)
     sleep 10
-    exec airflow "$@"
+    exec airflow celery "$@"
     ;;
   version)
     exec airflow "$@"

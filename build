@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build -t kubistmi/airflow:1.10.10 .
+docker build -t kubistmi/airflow:$1 .
